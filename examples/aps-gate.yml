@@ -1,0 +1,28 @@
+name: APS-GATE
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: read
+
+jobs:
+  aps-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate AI-authored PR
+        uses: your-org/aps-gate@v0
+        with:
+          profile: standard
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          trusted-approvers: ""
+          post-comment: "true"
+
+      - name: Upload APS-GATE safe artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aps-gate-safe-artifact
+          path: aps-gate.safe.json

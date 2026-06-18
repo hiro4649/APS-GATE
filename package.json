@@ -1,0 +1,26 @@
+{
+  "name": "aps-gate",
+  "version": "0.1.0",
+  "description": "Deterministic AI PR Safety Gate for GitHub pull requests.",
+  "license": "MIT",
+  "bin": {
+    "aps-gate": "dist/src/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "action.yml",
+    "examples",
+    "demo"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/tests/*.test.js",
+    "demo": "npm run build && node dist/src/cli.js evaluate --input demo/fixtures/pass-standard.json --output aps-gate.safe.json --comment-output aps-gate.comment.md",
+    "harness:check": "node scripts/aps-harness-check.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.0"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "0.1.0",
+  "tool": "APS-GATE",
+  "verdict": "BLOCKED",
+  "mergeAllowed": false,
+  "primaryBlocker": "same-head CI evidence is missing",
+  "safeNextAction": "rerun required checks on the current PR head",
+  "evidenceHeadSha": "abc123",
+  "profileUsed": "standard",
+  "forbiddenBoundaryFlags": {
+    "productCodeChanged": true,
+    "packageOrLockfileChanged": false,
+    "workflowChanged": false,
+    "runtimeChanged": false,
+    "deployTouched": false,
+    "walletRpcTouched": false,
+    "secretRiskTouched": false,
+    "readinessClaimed": false,
+    "contractTouched": false,
+    "migrationTouched": false,
+    "authTouched": false,
+    "infrastructureTouched": false,
+    "releaseTouched": false,
+    "governanceTouched": false,
+    "fundedTransactionTouched": false
+  },
+  "safeArtifactPath": "aps-gate.safe.json",
+  "rawLogsRead": false,
+  "secretsExposed": false,
+  "autoMergeAttempted": false
+}

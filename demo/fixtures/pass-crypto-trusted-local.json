@@ -1,0 +1,23 @@
+{
+  "profile": "crypto-web3",
+  "runMode": "local",
+  "headSha": "4444444444444444444444444444444444444444",
+  "changedFiles": ["contracts/Vault.sol"],
+  "checks": [
+    {
+      "name": "test",
+      "status": "completed",
+      "conclusion": "success",
+      "headSha": "4444444444444444444444444444444444444444"
+    }
+  ],
+  "trustedApproval": {
+    "source": "manual_fixture",
+    "approver": "hiro4649",
+    "headSha": "4444444444444444444444444444444444444444",
+    "profile": "crypto-web3",
+    "decision": "approved",
+    "reason": "Owner accepted contract metadata-only fixture change",
+    "createdAt": "2026-06-18T00:00:00Z"
+  }
+}

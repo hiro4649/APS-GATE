@@ -1,0 +1,14 @@
+{
+  "profile": "standard",
+  "headSha": "1111111111111111111111111111111111111111",
+  "changedFiles": ["src/app.ts", "README.md"],
+  "checks": [
+    {
+      "name": "test",
+      "status": "completed",
+      "conclusion": "success",
+      "headSha": "1111111111111111111111111111111111111111"
+    }
+  ],
+  "requiredChecks": ["test"]
+}

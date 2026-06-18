@@ -1,0 +1,63 @@
+name: APS-GATE
+description: Deterministic AI PR Safety Gate for GitHub pull requests.
+branding:
+  icon: shield
+  color: gray-dark
+inputs:
+  profile:
+    description: Policy profile to use.
+    required: false
+    default: standard
+  github-token:
+    description: Token used to read PR files/checks and post the short PR comment.
+    required: true
+  output-path:
+    description: Path for the safe artifact JSON.
+    required: false
+    default: aps-gate.safe.json
+  comment-path:
+    description: Path for the rendered PR comment markdown.
+    required: false
+    default: aps-gate.comment.md
+  post-comment:
+    description: Post the short APS-GATE PR comment.
+    required: false
+    default: "true"
+  trusted-approvers:
+    description: Comma-separated GitHub logins allowed to provide trusted owner approval.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Install APS-GATE
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd "$GITHUB_ACTION_PATH"
+        npm ci
+        npm run build
+    - name: Evaluate PR
+      shell: bash
+      env:
+        APS_GATE_PROFILE: ${{ inputs.profile }}
+        APS_GATE_OUTPUT_PATH: ${{ inputs.output-path }}
+        APS_GATE_COMMENT_PATH: ${{ inputs.comment-path }}
+        APS_GATE_POST_COMMENT: ${{ inputs.post-comment }}
+        APS_GATE_TRUSTED_APPROVERS: ${{ inputs.trusted-approvers }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        POST_COMMENT_ARG=""
+        if [ "$APS_GATE_POST_COMMENT" = "true" ]; then
+          POST_COMMENT_ARG="--post-comment"
+        fi
+
+        cd "$GITHUB_WORKSPACE"
+        node "$GITHUB_ACTION_PATH/dist/src/cli.js" evaluate \
+          --from-github \
+          --profile "$APS_GATE_PROFILE" \
+          --output "$APS_GATE_OUTPUT_PATH" \
+          --comment-output "$APS_GATE_COMMENT_PATH" \
+          --trusted-approver "$APS_GATE_TRUSTED_APPROVERS" \
+          $POST_COMMENT_ARG

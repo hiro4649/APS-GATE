@@ -1,0 +1,65 @@
+{
+  "marker": "CODEX_QUALITY_HARNESS_FILE v1.2.6",
+  "schemaVersion": "1.2.6-lite",
+  "sourceHarnessVersion": "1.2.6",
+  "harnessVersion": "1.2.6",
+  "activeHarnessVersion": "1.2.6",
+  "targetHarnessVersion": "1.2.6",
+  "targetRepoMode": true,
+  "sourceOnlyRelease": false,
+  "targetRollout": "local_lite_profile",
+  "activeSelfTestSuite": "aps-gate-v0",
+  "activeSelfTestStatusKey": "apsGateHarnessLiteStatus",
+  "profile": "APS_GATE_V126_LITE",
+  "profileSpec": "docs/process/CODEX_V126_APS_GATE_PROFILE.md",
+  "productSpec": "docs/process/APS_GATE_DETAILED_SPEC.md",
+  "theme": "APS-GATE v0 deterministic AI PR safety gate with HARNESS v1.2.6 Lite governance",
+  "requiredLocalCommands": [
+    "npm test",
+    "npm run demo",
+    "npm run harness:check"
+  ],
+  "forbiddenAuthority": {
+    "externalLlmForCoreVerdict": false,
+    "autoMerge": false,
+    "pullRequestTargetDefault": false,
+    "rawLogsRead": false,
+    "secretsExposed": false,
+    "walletRpcDeployAccess": false,
+    "productionReadinessClaimed": false,
+    "legalComplianceClaimed": false,
+    "youtubePolicyComplianceClaimed": false
+  },
+  "policyEvidenceBoundary": {
+    "userSuppliedPolicyEvidenceTrusted": false,
+    "ownerApprovalSelfDeclarationTrusted": false,
+    "trustedApprovalRequiresSource": true,
+    "trustedApprovalRequiresApprover": true,
+    "trustedApprovalRequiresHeadSha": true,
+    "trustedApprovalRequiresProfile": true,
+    "manualFixtureAllowedOnlyInLocalDemoTest": true,
+    "githubReviewCollection": "implemented_minimal_v0_1",
+    "githubReviewRequiresTrustedApproverAllowlist": true,
+    "githubReviewRequiresCurrentHeadSha": true,
+    "githubReviewRejectsSelfApproval": true,
+    "githubReviewRejectsBotApproval": true
+  },
+  "publicMvpSurface": {
+    "githubActionTemplate": true,
+    "onePageReadme": true,
+    "policyProfiles": [
+      "standard",
+      "crypto-web3",
+      "production-sensitive"
+    ],
+    "oneVerdictComment": true,
+    "safeArtifactJson": true,
+    "demoFixtures": true
+  },
+  "compatibility": {
+    "v118FinalDecisionAuthorityPreserved": true,
+    "v119ArtifactCompatibilityConceptPreserved": true,
+    "v126ObservedStateLiteOnly": true,
+    "fullHarnessMatrixInstalled": false
+  }
+}
