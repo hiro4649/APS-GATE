@@ -169,6 +169,32 @@ test("untrusted policyEvidence cannot unlock PASS", () => {
   assert.equal(result.primaryBlocker, "same-head CI evidence is missing");
 });
 
+test("PR head changes during evidence collection block with structured status", () => {
+  const result = evaluateGate({
+    profile: "standard",
+    headSha: "abc",
+    changedFiles: null,
+    checks: [],
+    requiredChecks: ["test"],
+    collectionStatus: {
+      status: "incomplete",
+      reasonCode: "PR_HEAD_CHANGED_DURING_EVIDENCE_COLLECTION",
+      requiredChecksConfigured: true,
+      requiredChecksSatisfied: false,
+      fileListComplete: false,
+      checkListComplete: false,
+      reviewListComplete: false,
+      approvalReceiptPresent: false
+    }
+  });
+
+  assert.equal(result.verdict, "BLOCKED");
+  assert.equal(result.primaryBlocker, "PR head changed during evidence collection");
+  assert.equal(result.safeNextAction, "rerun APS-GATE on the current PR head");
+  assert.equal(result.collectionStatus.reasonCode, "PR_HEAD_CHANGED_DURING_EVIDENCE_COLLECTION");
+  assert.equal(result.collectionStatus.fileListComplete, false);
+});
+
 test("trustedApproval with wrong head SHA remains OWNER_REQUIRED", () => {
   const result = evaluateGate(
     cryptoContractInput({
@@ -414,6 +440,16 @@ test("artifact and PR comment keep one verdict, reason, action, and evidence pat
   assert.equal(artifact.rawLogsRead, false);
   assert.equal(artifact.secretsExposed, false);
   assert.equal(artifact.autoMergeAttempted, false);
+  assert.deepEqual(artifact.collectionStatus, {
+    status: "complete",
+    reasonCode: "OK",
+    requiredChecksConfigured: true,
+    requiredChecksSatisfied: true,
+    fileListComplete: true,
+    checkListComplete: true,
+    reviewListComplete: true,
+    approvalReceiptPresent: false
+  });
   assert.match(comment, /^APS-GATE: PASS/);
   assert.match(comment, /Evidence:\naps-gate\.safe\.json/);
 });

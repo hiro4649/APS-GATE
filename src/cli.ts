@@ -112,6 +112,7 @@ async function buildGateInput(parsed: ParsedArgs): Promise<GateInput> {
     input.checks = githubInput.checks ?? [];
     input.trustedApproval = githubInput.trustedApproval ?? null;
     input.prAuthor = githubInput.prAuthor ?? null;
+    input.collectionStatus = githubInput.collectionStatus;
     input.runMode = "github_action";
   }
 

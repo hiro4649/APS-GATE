@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { CheckEvidence, GateInput, ProfileName, TrustedApproval } from "./types";
+import { CheckEvidence, CollectionReasonCode, CollectionStatus, GateInput, ProfileName, TrustedApproval } from "./types";
 import { createGithubReviewApprovalReceipt } from "./trusted-approval";
 
 interface GitHubContext {
@@ -68,12 +68,21 @@ export async function collectGithubPullRequestInput(
   }
 
   if (!token) {
-    return { headSha: context.headSha, prAuthor: context.prAuthor };
+    return {
+      headSha: context.headSha,
+      prAuthor: context.prAuthor,
+      collectionStatus: makeCollectionStatus({
+        reasonCode: "FILE_LIST_UNAVAILABLE",
+        fileListComplete: false,
+        checkListComplete: false,
+        reviewListComplete: false
+      })
+    };
   }
 
-  const observedBefore = await fetchPullRequestHead(context, token);
+  const observedBefore = await fetchPullRequestHeadOrNull(context, token);
   if (!observedBefore || observedBefore.headSha !== context.headSha) {
-    return { headSha: context.headSha, prAuthor: context.prAuthor, changedFiles: null, checks: [] };
+    return makeHeadCollectionFailure(context, observedBefore ? "PR_HEAD_CHANGED_DURING_EVIDENCE_COLLECTION" : "PR_HEAD_UNAVAILABLE");
   }
 
   const [changedFilesResult, checksResult, trustedApprovalResult] = await Promise.allSettled([
@@ -82,14 +91,30 @@ export async function collectGithubPullRequestInput(
     fetchTrustedGithubApproval(context, token, options)
   ]);
 
-  const observedAfter = await fetchPullRequestHead(context, token);
+  const observedAfter = await fetchPullRequestHeadOrNull(context, token);
   if (!observedAfter || observedAfter.headSha !== context.headSha) {
-    return { headSha: context.headSha, prAuthor: context.prAuthor, changedFiles: null, checks: [] };
+    return makeHeadCollectionFailure(context, observedAfter ? "PR_HEAD_CHANGED_DURING_EVIDENCE_COLLECTION" : "PR_HEAD_UNAVAILABLE");
   }
+
+  const fileListComplete = changedFilesResult.status === "fulfilled" && changedFilesResult.value !== null;
+  const checkListComplete = checksResult.status === "fulfilled";
+  const reviewListComplete = trustedApprovalResult.status === "fulfilled";
+  const reasonCode = chooseCollectionReasonCode({
+    changedFilesResult,
+    checksResult,
+    trustedApprovalResult
+  });
 
   const input: Partial<GateInput> = {
     headSha: context.headSha,
-    prAuthor: context.prAuthor
+    prAuthor: context.prAuthor,
+    collectionStatus: makeCollectionStatus({
+      reasonCode,
+      fileListComplete,
+      checkListComplete,
+      reviewListComplete,
+      approvalReceiptPresent: trustedApprovalResult.status === "fulfilled" && Boolean(trustedApprovalResult.value)
+    })
   };
   if (changedFilesResult.status === "fulfilled" && changedFilesResult.value) {
     input.changedFiles = changedFilesResult.value;
@@ -310,6 +335,73 @@ async function fetchPullRequestHead(context: GitHubContext, token: string): Prom
     headSha,
     prAuthor: pull.user?.login ?? null
   };
+}
+
+async function fetchPullRequestHeadOrNull(
+  context: GitHubContext,
+  token: string
+): Promise<{ headSha: string; prAuthor: string | null } | null> {
+  try {
+    return await fetchPullRequestHead(context, token);
+  } catch {
+    return null;
+  }
+}
+
+function makeHeadCollectionFailure(context: GitHubContext, reasonCode: CollectionReasonCode): Partial<GateInput> {
+  return {
+    headSha: context.headSha,
+    prAuthor: context.prAuthor,
+    changedFiles: null,
+    checks: [],
+    collectionStatus: makeCollectionStatus({
+      reasonCode,
+      fileListComplete: false,
+      checkListComplete: false,
+      reviewListComplete: false
+    })
+  };
+}
+
+function chooseCollectionReasonCode(results: {
+  changedFilesResult: PromiseSettledResult<string[] | null>;
+  checksResult: PromiseSettledResult<CheckEvidence[]>;
+  trustedApprovalResult: PromiseSettledResult<TrustedApproval | null>;
+}): CollectionReasonCode {
+  if (results.changedFilesResult.status === "fulfilled" && results.changedFilesResult.value === null) {
+    return "FILE_LIST_INCOMPLETE";
+  }
+  if (results.changedFilesResult.status === "rejected") {
+    return "FILE_LIST_UNAVAILABLE";
+  }
+  if (results.checksResult.status === "rejected") {
+    return errorCode(results.checksResult.reason) === "APS_GATE_CHECK_RUN_PAGINATION_INCOMPLETE"
+      ? "CHECK_LIST_INCOMPLETE"
+      : "CHECK_LIST_UNAVAILABLE";
+  }
+  if (results.trustedApprovalResult.status === "rejected") {
+    return errorCode(results.trustedApprovalResult.reason) === "APS_GATE_REVIEW_PAGINATION_INCOMPLETE"
+      ? "REVIEW_LIST_INCOMPLETE"
+      : "REVIEW_LIST_UNAVAILABLE";
+  }
+  return "OK";
+}
+
+function makeCollectionStatus(overrides: Partial<CollectionStatus> = {}): CollectionStatus {
+  return {
+    status: overrides.reasonCode && overrides.reasonCode !== "OK" ? "incomplete" : "complete",
+    reasonCode: overrides.reasonCode ?? "OK",
+    requiredChecksConfigured: overrides.requiredChecksConfigured ?? false,
+    requiredChecksSatisfied: overrides.requiredChecksSatisfied ?? false,
+    fileListComplete: overrides.fileListComplete ?? true,
+    checkListComplete: overrides.checkListComplete ?? true,
+    reviewListComplete: overrides.reviewListComplete ?? true,
+    approvalReceiptPresent: overrides.approvalReceiptPresent ?? false
+  };
+}
+
+function errorCode(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
 }
 
 async function githubRequest<T = unknown>(

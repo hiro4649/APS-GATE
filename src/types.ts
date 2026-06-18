@@ -63,8 +63,31 @@ export interface GateInput {
   requiredChecks?: string[];
   policyEvidence?: PolicyEvidence;
   trustedApproval?: Partial<TrustedApproval> | null;
+  collectionStatus?: CollectionStatus;
   claims?: string[];
   existingArtifact?: Partial<SafeArtifact> | null;
+}
+
+export type CollectionReasonCode =
+  | "OK"
+  | "PR_HEAD_CHANGED_DURING_EVIDENCE_COLLECTION"
+  | "PR_HEAD_UNAVAILABLE"
+  | "FILE_LIST_UNAVAILABLE"
+  | "CHECK_LIST_UNAVAILABLE"
+  | "REVIEW_LIST_UNAVAILABLE"
+  | "FILE_LIST_INCOMPLETE"
+  | "CHECK_LIST_INCOMPLETE"
+  | "REVIEW_LIST_INCOMPLETE";
+
+export interface CollectionStatus {
+  status: "complete" | "incomplete";
+  reasonCode: CollectionReasonCode;
+  requiredChecksConfigured: boolean;
+  requiredChecksSatisfied: boolean;
+  fileListComplete: boolean;
+  checkListComplete: boolean;
+  reviewListComplete: boolean;
+  approvalReceiptPresent: boolean;
 }
 
 export interface ForbiddenBoundaryFlags {
@@ -97,6 +120,7 @@ export interface GateResult {
   evidenceHeadSha: string | null;
   profileUsed: ProfileName;
   forbiddenBoundaryFlags: ForbiddenBoundaryFlags;
+  collectionStatus: CollectionStatus;
 }
 
 export interface SafeArtifact extends GateResult {

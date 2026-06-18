@@ -1,5 +1,6 @@
 import {
   CheckEvidence,
+  CollectionStatus,
   ForbiddenBoundaryFlags,
   GateInput,
   GateResult,
@@ -183,6 +184,17 @@ export function evaluateRequiredInputs(
   profileUsed: ProfileName,
   flags: ForbiddenBoundaryFlags
 ): GateResult | null {
+  if (input.collectionStatus?.reasonCode === "PR_HEAD_CHANGED_DURING_EVIDENCE_COLLECTION") {
+    return makeResult(
+      "BLOCKED",
+      "PR head changed during evidence collection",
+      "rerun APS-GATE on the current PR head",
+      input,
+      profileUsed,
+      flags
+    );
+  }
+
   if (!input.headSha || input.headSha.trim() === "") {
     return makeResult(
       "BLOCKED",
@@ -316,7 +328,8 @@ export function makeResult(
     safeNextAction,
     evidenceHeadSha: input.headSha ?? null,
     profileUsed,
-    forbiddenBoundaryFlags: flags
+    forbiddenBoundaryFlags: flags,
+    collectionStatus: buildCollectionStatus(input)
   };
 }
 
@@ -559,6 +572,20 @@ function normalizeRunMode(runMode: RunMode | undefined): RunMode {
 
 function invalidApproval(reason: string): TrustedApprovalValidation {
   return { valid: false, reason };
+}
+
+function buildCollectionStatus(input: GateInput): CollectionStatus {
+  const requiredChecksConfigured = (input.requiredChecks ?? []).length > 0;
+  return {
+    status: input.collectionStatus?.status ?? "complete",
+    reasonCode: input.collectionStatus?.reasonCode ?? "OK",
+    requiredChecksConfigured,
+    requiredChecksSatisfied: requiredChecksConfigured ? hasSameHeadCheckEvidence(input) : false,
+    fileListComplete: input.collectionStatus?.fileListComplete ?? Array.isArray(input.changedFiles),
+    checkListComplete: input.collectionStatus?.checkListComplete ?? true,
+    reviewListComplete: input.collectionStatus?.reviewListComplete ?? true,
+    approvalReceiptPresent: input.collectionStatus?.approvalReceiptPresent ?? Boolean(input.trustedApproval)
+  };
 }
 
 function isTrustedApprover(trustedApprovers: string[] | undefined, approver: string): boolean {

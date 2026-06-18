@@ -19,6 +19,8 @@ committed file is the reusable PR body template.
 - Add fail-closed classification for tests, scripts, configuration, workflows, CODEOWNERS, action files, and harness/process policy files.
 - Require trusted owner approval for security-control changes.
 - Add minimal GitHub review state reduction for latest decisive reviewer state.
+- Add safe artifact `collectionStatus` fields with bounded reason codes.
+- Emit an explicit PR-head-race blocker when metadata collection observes a changed head SHA.
 - Add pinned CI and CODEOWNERS.
 - Add public package metadata and MIT license.
 
@@ -37,6 +39,8 @@ committed file is the reusable PR body template.
 - Review approval without current-head binding.
 - Review approval without explicit bounded APS-GATE marker.
 - Check-run pagination truncation.
+- Collection failures disappearing from safe artifacts.
+- PR head-race failures using only generic missing-file evidence.
 
 ## Tests run
 
@@ -51,12 +55,10 @@ committed file is the reusable PR body template.
 
 ## Remote evidence status
 
-Remote CI is not yet attached to this branch at PR body creation time. It should attach after push and draft PR creation.
+Remote CI is expected to attach after each push to the draft PR branch.
 
 ## Known remaining limits
 
-- Collection failures currently fail closed by withholding evidence, but the safe artifact does not yet include all requested structured `collectionStatus` fields.
-- Head-race protection blocks evidence mixing by returning incomplete evidence, but it does not yet emit the exact requested blocker text.
 - Status collection uses the combined status endpoint; check run collection is paginated.
 - Review marker parsing is intentionally bounded and does not echo review bodies.
 - GitHub App slug or ID provenance is not yet bound into required check evidence.

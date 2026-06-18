@@ -28,6 +28,16 @@
     "governanceTouched": false,
     "fundedTransactionTouched": false
   },
+  "collectionStatus": {
+    "status": "complete",
+    "reasonCode": "OK",
+    "requiredChecksConfigured": true,
+    "requiredChecksSatisfied": false,
+    "fileListComplete": true,
+    "checkListComplete": true,
+    "reviewListComplete": true,
+    "approvalReceiptPresent": false
+  },
   "safeArtifactPath": "aps-gate.safe.json",
   "rawLogsRead": false,
   "secretsExposed": false,
