@@ -4,9 +4,10 @@
 
 `8712bbf527b033d0bc0fcd437df1e4d28089d943`
 
-## Current head SHA
+## Head SHA note
 
-`b8bc8bb409010b032da874c184b2d2a0834a52db`
+The GitHub PR body is edited after push with the current branch head SHA. This
+committed file is the reusable PR body template.
 
 ## Scope
 
