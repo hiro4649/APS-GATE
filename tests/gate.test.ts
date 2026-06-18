@@ -7,8 +7,9 @@ import test from "node:test";
 import { buildSafeArtifact } from "../src/artifact";
 import { renderPrComment } from "../src/comment";
 import { evaluateGate } from "../src/gate";
+import { collectGithubPullRequestInput } from "../src/github";
 import { createGithubReviewApprovalReceipt } from "../src/trusted-approval";
-import { GateInput, TrustedApproval } from "../src/types";
+import { CollectionReasonCode, GateInput, TrustedApproval } from "../src/types";
 
 const trustedCryptoApproval: TrustedApproval = {
   source: "manual_fixture",
@@ -30,6 +31,82 @@ function cryptoContractInput(overrides: Partial<GateInput> = {}): GateInput {
     requiredChecks: ["test"],
     ...overrides
   };
+}
+
+type MockRoute = (path: string) => unknown;
+
+async function withMockGithub<T>(route: MockRoute, run: () => Promise<T>): Promise<T> {
+  const previousFetch = globalThis.fetch;
+  const previousEventPath = process.env.GITHUB_EVENT_PATH;
+  const previousRepository = process.env.GITHUB_REPOSITORY;
+  const tempDir = mkdtempSync(join(tmpdir(), "aps-gate-github-"));
+  const eventPath = join(tempDir, "event.json");
+
+  writeFileSync(
+    eventPath,
+    `${JSON.stringify({
+      number: 12,
+      pull_request: {
+        number: 12,
+        head: { sha: "abc" },
+        user: { login: "contributor" }
+      }
+    })}\n`,
+    "utf8"
+  );
+
+  process.env.GITHUB_EVENT_PATH = eventPath;
+  process.env.GITHUB_REPOSITORY = "owner/repo";
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    const path = new URL(url.toString()).pathname + new URL(url.toString()).search;
+    const body = route(path);
+    if (body instanceof Error) {
+      return new Response(JSON.stringify({ message: body.message }), { status: 500, statusText: "Internal Server Error" });
+    }
+    return new Response(JSON.stringify(body), { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = previousFetch;
+    restoreEnv("GITHUB_EVENT_PATH", previousEventPath);
+    restoreEnv("GITHUB_REPOSITORY", previousRepository);
+  }
+}
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
+}
+
+function headResponse(headSha = "abc"): unknown {
+  return { head: { sha: headSha }, user: { login: "contributor" } };
+}
+
+function successfulChecksResponse(): unknown {
+  return {
+    total_count: 1,
+    check_runs: [{ name: "test", status: "completed", conclusion: "success", head_sha: "abc" }]
+  };
+}
+
+function statusesResponse(): unknown {
+  return { statuses: [] };
+}
+
+async function assertGithubCollectionReason(route: MockRoute, expectedReason: CollectionReasonCode): Promise<void> {
+  await withMockGithub(route, async () => {
+    const input = await collectGithubPullRequestInput("token", {
+      profile: "crypto-web3",
+      trustedApprovers: ["hiro4649"]
+    });
+    assert.equal(input.collectionStatus?.reasonCode, expectedReason);
+    assert.equal(input.collectionStatus?.status, expectedReason === "OK" ? "complete" : "incomplete");
+  });
 }
 
 test("standard passes product code with same-head CI evidence", () => {
@@ -193,6 +270,107 @@ test("PR head changes during evidence collection block with structured status", 
   assert.equal(result.safeNextAction, "rerun APS-GATE on the current PR head");
   assert.equal(result.collectionStatus.reasonCode, "PR_HEAD_CHANGED_DURING_EVIDENCE_COLLECTION");
   assert.equal(result.collectionStatus.fileListComplete, false);
+});
+
+test("GitHub collection records PR head race without mixing evidence", async () => {
+  let headReads = 0;
+  await assertGithubCollectionReason((path) => {
+    if (path === "/repos/owner/repo/pulls/12") {
+      headReads += 1;
+      return headResponse(headReads === 1 ? "abc" : "def");
+    }
+    if (path.startsWith("/repos/owner/repo/pulls/12/files?")) {
+      return [{ filename: "src/app.ts" }];
+    }
+    if (path.startsWith("/repos/owner/repo/commits/abc/check-runs?")) {
+      return successfulChecksResponse();
+    }
+    if (path === "/repos/owner/repo/commits/abc/status") {
+      return statusesResponse();
+    }
+    if (path.startsWith("/repos/owner/repo/pulls/12/reviews?")) {
+      return [];
+    }
+    throw new Error(`unexpected GitHub mock path: ${path}`);
+  }, "PR_HEAD_CHANGED_DURING_EVIDENCE_COLLECTION");
+});
+
+test("GitHub collection records file list pagination truncation", async () => {
+  await assertGithubCollectionReason((path) => {
+    if (path === "/repos/owner/repo/pulls/12") {
+      return headResponse();
+    }
+    if (path.startsWith("/repos/owner/repo/pulls/12/files?")) {
+      return Array.from({ length: 100 }, (_, index) => ({ filename: `src/file-${index}.ts` }));
+    }
+    if (path.startsWith("/repos/owner/repo/commits/abc/check-runs?")) {
+      return successfulChecksResponse();
+    }
+    if (path === "/repos/owner/repo/commits/abc/status") {
+      return statusesResponse();
+    }
+    if (path.startsWith("/repos/owner/repo/pulls/12/reviews?")) {
+      return [];
+    }
+    throw new Error(`unexpected GitHub mock path: ${path}`);
+  }, "FILE_LIST_INCOMPLETE");
+});
+
+test("GitHub collection records check-run pagination truncation", async () => {
+  await assertGithubCollectionReason((path) => {
+    if (path === "/repos/owner/repo/pulls/12") {
+      return headResponse();
+    }
+    if (path.startsWith("/repos/owner/repo/pulls/12/files?")) {
+      return [{ filename: "src/app.ts" }];
+    }
+    if (path.startsWith("/repos/owner/repo/commits/abc/check-runs?")) {
+      return {
+        total_count: 3001,
+        check_runs: Array.from({ length: 100 }, (_, index) => ({
+          name: `test-${index}`,
+          status: "completed",
+          conclusion: "success",
+          head_sha: "abc"
+        }))
+      };
+    }
+    if (path === "/repos/owner/repo/commits/abc/status") {
+      return statusesResponse();
+    }
+    if (path.startsWith("/repos/owner/repo/pulls/12/reviews?")) {
+      return [];
+    }
+    throw new Error(`unexpected GitHub mock path: ${path}`);
+  }, "CHECK_LIST_INCOMPLETE");
+});
+
+test("GitHub collection records review pagination truncation", async () => {
+  await assertGithubCollectionReason((path) => {
+    if (path === "/repos/owner/repo/pulls/12") {
+      return headResponse();
+    }
+    if (path.startsWith("/repos/owner/repo/pulls/12/files?")) {
+      return [{ filename: "contracts/Vault.sol" }];
+    }
+    if (path.startsWith("/repos/owner/repo/commits/abc/check-runs?")) {
+      return successfulChecksResponse();
+    }
+    if (path === "/repos/owner/repo/commits/abc/status") {
+      return statusesResponse();
+    }
+    if (path.startsWith("/repos/owner/repo/pulls/12/reviews?")) {
+      return Array.from({ length: 100 }, (_, index) => ({
+        id: index,
+        state: "COMMENTED",
+        body: "bounded mock review",
+        submitted_at: "2026-06-18T00:00:00Z",
+        commit_id: "abc",
+        user: { login: `reviewer-${index}`, type: "User" }
+      }));
+    }
+    throw new Error(`unexpected GitHub mock path: ${path}`);
+  }, "REVIEW_LIST_INCOMPLETE");
 });
 
 test("trustedApproval with wrong head SHA remains OWNER_REQUIRED", () => {

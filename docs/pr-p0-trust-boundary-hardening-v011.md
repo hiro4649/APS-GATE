@@ -39,6 +39,7 @@ committed file is the reusable PR body template.
 - Review approval without current-head binding.
 - Review approval without explicit bounded APS-GATE marker.
 - Check-run pagination truncation.
+- Check-run pagination truncation hidden by successful commit status evidence.
 - Collection failures disappearing from safe artifacts.
 - PR head-race failures using only generic missing-file evidence.
 
@@ -50,8 +51,6 @@ committed file is the reusable PR body template.
 - `npm run harness:check`
 - `npm pack --dry-run`
 - `git diff --check`
-- clean build validation: remove `dist`, then `npm run build`
-- post-clean `npm test`
 
 ## Remote evidence status
 
@@ -62,7 +61,7 @@ Remote CI is expected to attach after each push to the draft PR branch.
 - Status collection uses the combined status endpoint; check run collection is paginated.
 - Review marker parsing is intentionally bounded and does not echo review bodies.
 - GitHub App slug or ID provenance is not yet bound into required check evidence.
-- Fork PR integration is not covered by a mocked HTTP integration suite yet.
+- Fork PR permission behavior is not yet covered with a live GitHub fork scenario.
 
 ## No auto-merge
 

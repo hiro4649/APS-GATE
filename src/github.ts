@@ -220,6 +220,10 @@ async function fetchCheckEvidence(context: GitHubContext, token: string): Promis
     );
   }
 
+  if (checkRunsResult.status === "rejected") {
+    throw checkRunsResult.reason;
+  }
+
   if (statusesResult.status === "fulfilled") {
     checks.push(
       ...statusesResult.value.statuses.map((status) => ({
@@ -229,6 +233,10 @@ async function fetchCheckEvidence(context: GitHubContext, token: string): Promis
         headSha: context.headSha
       }))
     );
+  }
+
+  if (statusesResult.status === "rejected" && checks.length === 0) {
+    throw statusesResult.reason;
   }
 
   return checks;
