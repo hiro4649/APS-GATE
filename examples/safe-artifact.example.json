@@ -8,6 +8,10 @@
   "evidenceHeadSha": "abc123",
   "profileUsed": "standard",
   "forbiddenBoundaryFlags": {
+    "verificationRelevantChanged": true,
+    "securityControlChanged": false,
+    "testsChanged": false,
+    "configurationChanged": false,
     "productCodeChanged": true,
     "packageOrLockfileChanged": false,
     "workflowChanged": false,

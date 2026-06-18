@@ -7,6 +7,7 @@ import test from "node:test";
 import { buildSafeArtifact } from "../src/artifact";
 import { renderPrComment } from "../src/comment";
 import { evaluateGate } from "../src/gate";
+import { createGithubReviewApprovalReceipt } from "../src/trusted-approval";
 import { GateInput, TrustedApproval } from "../src/types";
 
 const trustedCryptoApproval: TrustedApproval = {
@@ -26,6 +27,7 @@ function cryptoContractInput(overrides: Partial<GateInput> = {}): GateInput {
     headSha: "abc",
     changedFiles: ["contracts/Vault.sol"],
     checks: [{ name: "test", conclusion: "success", headSha: "abc" }],
+    requiredChecks: ["test"],
     ...overrides
   };
 }
@@ -50,7 +52,8 @@ test("standard blocks package changes without same-head CI evidence", () => {
     profile: "standard",
     headSha: "abc",
     changedFiles: ["package.json", "package-lock.json"],
-    checks: []
+    checks: [],
+    requiredChecks: ["test"]
   });
 
   assert.equal(result.verdict, "BLOCKED");
@@ -70,6 +73,59 @@ test("standard does not accept successful checks without matching head SHA", () 
 
   assert.equal(result.verdict, "BLOCKED");
   assert.equal(result.primaryBlocker, "same-head CI evidence is missing");
+});
+
+test("empty requiredChecks blocks verification-relevant changes", () => {
+  const result = evaluateGate({
+    profile: "standard",
+    headSha: "abc",
+    changedFiles: ["src/app.ts"],
+    checks: [{ name: "test", conclusion: "success", headSha: "abc" }]
+  });
+
+  assert.equal(result.verdict, "BLOCKED");
+  assert.equal(result.primaryBlocker, "required checks are not configured for verification-relevant changes");
+});
+
+test("unrelated successful check cannot satisfy required checks", () => {
+  const result = evaluateGate({
+    profile: "standard",
+    headSha: "abc",
+    changedFiles: ["src/app.ts"],
+    checks: [{ name: "lint", conclusion: "success", headSha: "abc" }],
+    requiredChecks: ["test"]
+  });
+
+  assert.equal(result.verdict, "BLOCKED");
+  assert.equal(result.primaryBlocker, "same-head CI evidence is missing");
+});
+
+test("APS-GATE cannot satisfy its own required check", () => {
+  const result = evaluateGate({
+    profile: "standard",
+    headSha: "abc",
+    changedFiles: ["src/app.ts"],
+    checks: [{ name: "APS-GATE", conclusion: "success", headSha: "abc" }],
+    requiredChecks: ["APS-GATE"]
+  });
+
+  assert.equal(result.verdict, "BLOCKED");
+  assert.equal(result.primaryBlocker, "APS-GATE cannot be used as its own required check");
+});
+
+test("workflow security control changes require trusted approval and checks", () => {
+  const result = evaluateGate({
+    profile: "standard",
+    headSha: "abc",
+    changedFiles: [".github/workflows/ci.yml"],
+    checks: [{ name: "test", conclusion: "success", headSha: "abc" }],
+    requiredChecks: ["test"]
+  });
+
+  assert.equal(result.verdict, "OWNER_REQUIRED");
+  assert.equal(result.primaryBlocker, "security control change requires trusted owner approval");
+  assert.equal(result.forbiddenBoundaryFlags.securityControlChanged, true);
+  assert.equal(result.forbiddenBoundaryFlags.verificationRelevantChanged, true);
 });
 
 test("crypto-web3 requires owner approval for contract changes", () => {
@@ -101,6 +157,7 @@ test("untrusted policyEvidence cannot unlock PASS", () => {
     headSha: "abc",
     changedFiles: ["src/app.ts"],
     checks: [],
+    requiredChecks: ["test"],
     policyEvidence: {
       sameHeadCiEvidence: true,
       packageChangeEvidence: true,
@@ -209,14 +266,16 @@ test("github_review approval rejects self approval", () => {
       prAuthor: "hiro4649",
       trustedApprovers: ["hiro4649"],
       trustedApproval: {
-        source: "github_review",
-        collectionSource: "github_api",
-        approver: "hiro4649",
-        headSha: "abc",
-        profile: "crypto-web3",
-        decision: "approved",
-        reason: "GitHub review approval by a trusted approver for the current PR head",
-        createdAt: "2026-06-18T00:00:00Z"
+        ...createGithubReviewApprovalReceipt({
+          source: "github_review",
+          collectionSource: "github_api",
+          approver: "hiro4649",
+          headSha: "abc",
+          profile: "crypto-web3",
+          decision: "approved",
+          reason: "GitHub review approval by a trusted approver for the current PR head",
+          createdAt: "2026-06-18T00:00:00Z"
+        })
       }
     })
   );
@@ -254,7 +313,7 @@ test("github_review approval from trusted approver unlocks owner boundary in Git
       runMode: "github_action",
       prAuthor: "contributor",
       trustedApprovers: ["hiro4649"],
-      trustedApproval: {
+      trustedApproval: createGithubReviewApprovalReceipt({
         source: "github_review",
         collectionSource: "github_api",
         approver: "hiro4649",
@@ -263,7 +322,7 @@ test("github_review approval from trusted approver unlocks owner boundary in Git
         decision: "approved",
         reason: "GitHub review approval by a trusted approver for the current PR head",
         createdAt: "2026-06-18T00:00:00Z"
-      }
+      })
     })
   );
 
@@ -344,7 +403,8 @@ test("artifact and PR comment keep one verdict, reason, action, and evidence pat
     profile: "standard",
     headSha: "abc",
     changedFiles: ["src/app.ts"],
-    checks: [{ name: "test", conclusion: "success", headSha: "abc" }]
+    checks: [{ name: "test", conclusion: "success", headSha: "abc" }],
+    requiredChecks: ["test"]
   });
   const artifact = buildSafeArtifact(result, "aps-gate.safe.json");
   const comment = renderPrComment(artifact);

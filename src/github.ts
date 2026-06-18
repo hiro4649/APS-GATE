@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
 import { CheckEvidence, GateInput, ProfileName, TrustedApproval } from "./types";
+import { createGithubReviewApprovalReceipt } from "./trusted-approval";
 
 interface GitHubContext {
   owner: string;
   repo: string;
+  repository: string;
   pullNumber: number;
   headSha: string;
   prAuthor: string | null;
@@ -20,12 +22,18 @@ interface CheckRunResponse {
   head_sha?: string | null;
 }
 
+interface CheckRunsResponse {
+  total_count: number;
+  check_runs: CheckRunResponse[];
+}
+
 interface StatusResponse {
   context: string;
   state: string;
 }
 
 interface PullRequestReviewResponse {
+  id?: number | null;
   state: string;
   body?: string | null;
   submitted_at?: string | null;
@@ -33,6 +41,15 @@ interface PullRequestReviewResponse {
   user?: {
     login?: string | null;
     type?: string | null;
+  } | null;
+}
+
+interface PullRequestResponse {
+  head?: {
+    sha?: string | null;
+  } | null;
+  user?: {
+    login?: string | null;
   } | null;
 }
 
@@ -54,11 +71,21 @@ export async function collectGithubPullRequestInput(
     return { headSha: context.headSha, prAuthor: context.prAuthor };
   }
 
+  const observedBefore = await fetchPullRequestHead(context, token);
+  if (!observedBefore || observedBefore.headSha !== context.headSha) {
+    return { headSha: context.headSha, prAuthor: context.prAuthor, changedFiles: null, checks: [] };
+  }
+
   const [changedFilesResult, checksResult, trustedApprovalResult] = await Promise.allSettled([
     fetchPullRequestFiles(context, token),
     fetchCheckEvidence(context, token),
     fetchTrustedGithubApproval(context, token, options)
   ]);
+
+  const observedAfter = await fetchPullRequestHead(context, token);
+  if (!observedAfter || observedAfter.headSha !== context.headSha) {
+    return { headSha: context.headSha, prAuthor: context.prAuthor, changedFiles: null, checks: [] };
+  }
 
   const input: Partial<GateInput> = {
     headSha: context.headSha,
@@ -118,6 +145,7 @@ function readGithubContext(env: NodeJS.ProcessEnv = process.env): GitHubContext 
   return {
     owner,
     repo,
+    repository: `${owner}/${repo}`,
     pullNumber,
     headSha: pullRequest.head.sha,
     prAuthor: pullRequest.user?.login ?? null
@@ -149,10 +177,7 @@ async function fetchCheckEvidence(context: GitHubContext, token: string): Promis
   const checks: CheckEvidence[] = [];
 
   const [checkRunsResult, statusesResult] = await Promise.allSettled([
-    githubRequest<{ check_runs: CheckRunResponse[] }>(
-      token,
-      `/repos/${context.owner}/${context.repo}/commits/${context.headSha}/check-runs?filter=latest&per_page=100`
-    ),
+    fetchAllCheckRuns(context, token),
     githubRequest<{ statuses: StatusResponse[] }>(
       token,
       `/repos/${context.owner}/${context.repo}/commits/${context.headSha}/status`
@@ -161,7 +186,7 @@ async function fetchCheckEvidence(context: GitHubContext, token: string): Promis
 
   if (checkRunsResult.status === "fulfilled") {
     checks.push(
-      ...checkRunsResult.value.check_runs.map((checkRun) => ({
+      ...checkRunsResult.value.map((checkRun) => ({
         name: checkRun.name,
         status: checkRun.status,
         conclusion: checkRun.conclusion,
@@ -184,6 +209,29 @@ async function fetchCheckEvidence(context: GitHubContext, token: string): Promis
   return checks;
 }
 
+async function fetchAllCheckRuns(context: GitHubContext, token: string): Promise<CheckRunResponse[]> {
+  const runs: CheckRunResponse[] = [];
+  const maxPages = 30;
+  let totalCount = 0;
+  for (let page = 1; page <= maxPages; page += 1) {
+    const batch = await githubRequest<CheckRunsResponse>(
+      token,
+      `/repos/${context.owner}/${context.repo}/commits/${context.headSha}/check-runs?filter=latest&per_page=100&page=${page}`
+    );
+    totalCount = batch.total_count;
+    runs.push(...batch.check_runs);
+    if (runs.length >= totalCount || batch.check_runs.length < 100) {
+      break;
+    }
+  }
+
+  if (runs.length < totalCount) {
+    throw new Error("APS_GATE_CHECK_RUN_PAGINATION_INCOMPLETE");
+  }
+
+  return runs;
+}
+
 async function fetchTrustedGithubApproval(
   context: GitHubContext,
   token: string,
@@ -193,15 +241,19 @@ async function fetchTrustedGithubApproval(
     return null;
   }
 
+  const profile = options.profile;
   const reviews = await fetchPullRequestReviews(context, token);
   const trustedApprovers = new Set((options.trustedApprovers ?? []).map(normalizeIdentity));
-  const approvedReviews = reviews
+  const approvedReviews = latestDecisiveReviewsByReviewer(reviews)
     .filter((review) => review.state.toUpperCase() === "APPROVED")
     .filter((review) => review.commit_id === context.headSha)
+    .filter((review) => Number.isFinite(review.id))
+    .filter((review) => isValidTimestamp(review.submitted_at))
     .filter((review) => Boolean(review.user?.login))
-    .filter((review) => review.user?.type !== "Bot")
+    .filter((review) => review.user?.type === "User")
     .filter((review) => trustedApprovers.has(normalizeIdentity(review.user?.login ?? "")))
     .filter((review) => !context.prAuthor || normalizeIdentity(review.user?.login ?? "") !== normalizeIdentity(context.prAuthor))
+    .filter((review) => hasApprovalMarker(review.body, profile))
     .sort((left, right) => Date.parse(right.submitted_at ?? "") - Date.parse(left.submitted_at ?? ""));
 
   const review = approvedReviews[0];
@@ -210,16 +262,20 @@ async function fetchTrustedGithubApproval(
     return null;
   }
 
-  return {
+  return createGithubReviewApprovalReceipt({
     source: "github_review",
     collectionSource: "github_api",
+    repository: context.repository,
+    pullNumber: context.pullNumber,
+    reviewId: review.id ?? undefined,
+    approvedBoundaries: parseApprovedBoundaries(review.body),
     approver,
     headSha: context.headSha,
-    profile: options.profile,
+    profile,
     decision: "approved",
     reason: "GitHub review approval by a trusted approver for the current PR head",
     createdAt: review.submitted_at ?? new Date().toISOString()
-  };
+  });
 }
 
 async function fetchPullRequestReviews(context: GitHubContext, token: string): Promise<PullRequestReviewResponse[]> {
@@ -235,7 +291,25 @@ async function fetchPullRequestReviews(context: GitHubContext, token: string): P
       break;
     }
   }
+  if (reviews.length === maxPages * 100) {
+    throw new Error("APS_GATE_REVIEW_PAGINATION_INCOMPLETE");
+  }
   return reviews;
+}
+
+async function fetchPullRequestHead(context: GitHubContext, token: string): Promise<{ headSha: string; prAuthor: string | null } | null> {
+  const pull = await githubRequest<PullRequestResponse>(
+    token,
+    `/repos/${context.owner}/${context.repo}/pulls/${context.pullNumber}`
+  );
+  const headSha = pull.head?.sha;
+  if (!headSha) {
+    return null;
+  }
+  return {
+    headSha,
+    prAuthor: pull.user?.login ?? null
+  };
 }
 
 async function githubRequest<T = unknown>(
@@ -263,4 +337,39 @@ async function githubRequest<T = unknown>(
 
 function normalizeIdentity(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function latestDecisiveReviewsByReviewer(reviews: PullRequestReviewResponse[]): PullRequestReviewResponse[] {
+  const decisiveStates = new Set(["APPROVED", "CHANGES_REQUESTED", "DISMISSED"]);
+  const latest = new Map<string, PullRequestReviewResponse>();
+  for (const review of reviews) {
+    const state = review.state.toUpperCase();
+    const login = review.user?.login;
+    if (!login || !decisiveStates.has(state) || !isValidTimestamp(review.submitted_at)) {
+      continue;
+    }
+    const key = normalizeIdentity(login);
+    const existing = latest.get(key);
+    if (!existing || Date.parse(review.submitted_at ?? "") > Date.parse(existing.submitted_at ?? "")) {
+      latest.set(key, review);
+    }
+  }
+  return [...latest.values()];
+}
+
+function isValidTimestamp(value: string | null | undefined): boolean {
+  return Boolean(value && Number.isFinite(Date.parse(value)));
+}
+
+function hasApprovalMarker(body: string | null | undefined, profile: ProfileName): boolean {
+  if (!body) {
+    return false;
+  }
+  const lines = body.split(/\r?\n/).map((line) => line.trim());
+  return lines.includes("APS-GATE-APPROVE") && lines.includes(`profile=${profile}`) && lines.some((line) => line.startsWith("boundaries="));
+}
+
+function parseApprovedBoundaries(body: string | null | undefined): string[] {
+  const boundaryLine = body?.split(/\r?\n/).map((line) => line.trim()).find((line) => line.startsWith("boundaries="));
+  return boundaryLine ? boundaryLine.slice("boundaries=".length).split(",").map((value) => value.trim()).filter(Boolean) : [];
 }

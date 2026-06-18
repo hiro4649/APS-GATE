@@ -18,6 +18,7 @@ jobs:
           profile: standard
           github-token: ${{ secrets.GITHUB_TOKEN }}
           trusted-approvers: ""
+          required-checks: "test"
           post-comment: "true"
 
       - name: Upload APS-GATE safe artifact

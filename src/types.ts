@@ -40,6 +40,10 @@ export interface PolicyEvidence {
 export interface TrustedApproval {
   source: TrustedApprovalSource;
   collectionSource?: TrustedApprovalCollectionSource;
+  repository?: string;
+  pullNumber?: number;
+  reviewId?: number;
+  approvedBoundaries?: string[];
   approver: string;
   headSha: string;
   profile: ProfileName;
@@ -64,6 +68,10 @@ export interface GateInput {
 }
 
 export interface ForbiddenBoundaryFlags {
+  verificationRelevantChanged: boolean;
+  securityControlChanged: boolean;
+  testsChanged: boolean;
+  configurationChanged: boolean;
   productCodeChanged: boolean;
   packageOrLockfileChanged: boolean;
   workflowChanged: boolean;

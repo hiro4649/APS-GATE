@@ -30,6 +30,7 @@ jobs:
           profile: standard
           github-token: ${{ secrets.GITHUB_TOKEN }}
           trusted-approvers: ""
+          required-checks: "test"
 ```
 
 APS-GATE does not check out or run untrusted PR code. It reads PR metadata, changed file names, and check/status conclusions for the current PR head SHA. Check evidence must match the current PR head SHA. `pull_request_target` is not the default because it can expose privileged workflow context to untrusted changes. On fork PRs, GitHub may prevent comment writes; APS-GATE still emits the artifact and stdout verdict.
@@ -47,6 +48,7 @@ node dist/src/cli.js evaluate \
 ```
 
 The CLI exits `0` for `PASS` and `2` for `BLOCKED` or `OWNER_REQUIRED`. Add `--no-fail-on-blocked` for local inspection.
+Verification-relevant changes require explicit `--required-check` values. APS-GATE's own check must not be listed as a required check.
 
 ## Profiles
 

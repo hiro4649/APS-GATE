@@ -8,6 +8,7 @@ import {
   TrustedApproval,
   Verdict
 } from "../types";
+import { isGithubReviewApprovalReceipt } from "../trusted-approval";
 
 const CODE_EXTENSIONS = new Set([
   ".c",
@@ -33,7 +34,32 @@ const CODE_EXTENSIONS = new Set([
   ".vy"
 ]);
 
+const VERIFICATION_RELEVANT_EXTENSIONS = new Set([
+  ...CODE_EXTENSIONS,
+  ".bash",
+  ".bat",
+  ".bicep",
+  ".cmd",
+  ".gql",
+  ".graphql",
+  ".hcl",
+  ".json",
+  ".prisma",
+  ".proto",
+  ".ps1",
+  ".sh",
+  ".sql",
+  ".toml",
+  ".yaml",
+  ".yml",
+  ".zsh"
+]);
+
 export const EMPTY_FLAGS: ForbiddenBoundaryFlags = {
+  verificationRelevantChanged: false,
+  securityControlChanged: false,
+  testsChanged: false,
+  configurationChanged: false,
   productCodeChanged: false,
   packageOrLockfileChanged: false,
   workflowChanged: false,
@@ -63,19 +89,28 @@ export function classifyChangedFiles(
 
     if (isPackageOrLockfile(filePath)) {
       flags.packageOrLockfileChanged = true;
+      flags.configurationChanged = true;
+      flags.verificationRelevantChanged = true;
     }
 
     if (isWorkflowFile(filePath)) {
       flags.workflowChanged = true;
+      flags.securityControlChanged = true;
+      flags.configurationChanged = true;
+      flags.verificationRelevantChanged = true;
     }
 
     if (isRuntimeFile(filePath)) {
       flags.runtimeChanged = true;
       flags.infrastructureTouched = true;
+      flags.configurationChanged = true;
+      flags.verificationRelevantChanged = true;
     }
 
     if (matches(filePath, /(^|\/)(infra|infrastructure|terraform|k8s|kubernetes|helm|charts)\//)) {
       flags.infrastructureTouched = true;
+      flags.configurationChanged = true;
+      flags.verificationRelevantChanged = true;
     }
 
     if (matches(filePath, /(^|\/)(deploy|deployment|deployments|scripts\/deploy|scripts\/release)(\/|\.|-|$)/)) {
@@ -96,6 +131,7 @@ export function classifyChangedFiles(
 
     if (matches(filePath, /(^|\/)(migrations?|db\/migrations|prisma\/migrations|flyway|liquibase)(\/|$)/)) {
       flags.migrationTouched = true;
+      flags.verificationRelevantChanged = true;
     }
 
     if (matches(filePath, /(auth|oauth|saml|session|jwt|rbac|permission|permissions)/)) {
@@ -112,6 +148,25 @@ export function classifyChangedFiles(
 
     if (matches(filePath, /(funded|treasury|multisig|safe-transaction|safe_transaction|tx-builder|transaction)/)) {
       flags.fundedTransactionTouched = true;
+    }
+
+    if (isTestOnlyPath(filePath)) {
+      flags.testsChanged = true;
+      flags.verificationRelevantChanged = true;
+    }
+
+    if (isConfigurationPath(filePath) || VERIFICATION_RELEVANT_EXTENSIONS.has(extension) || isMakefile(filePath)) {
+      flags.verificationRelevantChanged = true;
+    }
+
+    if (isSecurityControlPath(filePath)) {
+      flags.securityControlChanged = true;
+      flags.configurationChanged = true;
+      flags.verificationRelevantChanged = true;
+    }
+
+    if (isConfigurationPath(filePath)) {
+      flags.configurationChanged = true;
     }
 
     if (CODE_EXTENSIONS.has(extension) && !isTestOnlyPath(filePath)) {
@@ -158,7 +213,30 @@ export function evaluateStandardEvidence(
   profileUsed: ProfileName,
   flags: ForbiddenBoundaryFlags
 ): GateResult | null {
+  const requiredCheckError = validateRequiredChecks(input.requiredChecks ?? []);
+  if (requiredCheckError) {
+    return makeResult(
+      "BLOCKED",
+      requiredCheckError,
+      "configure required checks that exclude APS-GATE itself",
+      input,
+      profileUsed,
+      flags
+    );
+  }
+
   const sameHeadCi = hasSameHeadCheckEvidence(input);
+
+  if (flags.verificationRelevantChanged && (input.requiredChecks ?? []).length === 0) {
+    return makeResult(
+      "BLOCKED",
+      "required checks are not configured for verification-relevant changes",
+      "configure explicit required checks for APS-GATE evaluation",
+      input,
+      profileUsed,
+      flags
+    );
+  }
 
   if (flags.packageOrLockfileChanged && !sameHeadCi) {
     return makeResult(
@@ -196,6 +274,25 @@ export function evaluateStandardEvidence(
   return null;
 }
 
+export function evaluateSecurityControlBoundary(
+  input: GateInput,
+  profileUsed: ProfileName,
+  flags: ForbiddenBoundaryFlags
+): GateResult | null {
+  if (!flags.securityControlChanged || hasTrustedOwnerApproval(input, profileUsed)) {
+    return null;
+  }
+
+  return makeResult(
+    "OWNER_REQUIRED",
+    "security control change requires trusted owner approval",
+    "add trusted owner approval for the security control change on the current PR head",
+    input,
+    profileUsed,
+    flags
+  );
+}
+
 export function makePass(
   input: GateInput,
   profileUsed: ProfileName,
@@ -229,14 +326,14 @@ export function hasSameHeadCheckEvidence(input: GateInput): boolean {
     return false;
   }
 
-  const requiredChecks = (input.requiredChecks ?? []).map(normalizeCheckName).filter(Boolean);
-  if (requiredChecks.length > 0) {
-    return requiredChecks.every((requiredName) =>
-      checks.some((check) => normalizeCheckName(check.name) === requiredName && isSuccessfulSameHeadCheck(check, input.headSha))
-    );
+  const requiredChecks = normalizeRequiredChecks(input.requiredChecks ?? []);
+  if (requiredChecks.length === 0) {
+    return false;
   }
 
-  return checks.some((check) => isSuccessfulSameHeadCheck(check, input.headSha));
+  return requiredChecks.every((requiredName) =>
+    checks.some((check) => normalizeCheckName(check.name) === requiredName && isSuccessfulSameHeadCheck(check, input.headSha))
+  );
 }
 
 export function hasTrustedOwnerApproval(input: GateInput, profileUsed: ProfileName): boolean {
@@ -282,7 +379,7 @@ export function validateTrustedApproval(input: GateInput, profileUsed: ProfileNa
     if (runMode !== "github_action") {
       return invalidApproval("GitHub review approval is only trusted in GitHub Action mode");
     }
-    if (approval.collectionSource !== "github_api") {
+    if (!isGithubReviewApprovalReceipt(approval)) {
       return invalidApproval("GitHub review approval was not collected from the GitHub API");
     }
     if (!isTrustedApprover(input.trustedApprovers, approval.approver)) {
@@ -369,6 +466,44 @@ function isRuntimeFile(filePath: string): boolean {
   );
 }
 
+function isConfigurationPath(filePath: string): boolean {
+  return (
+    isWorkflowFile(filePath) ||
+    isMakefile(filePath) ||
+    filePath === ".github/codeowners" ||
+    filePath === "codeowners" ||
+    filePath.includes("codeowners") ||
+    filePath.startsWith("docs/process/") ||
+    filePath === "agents.md" ||
+    filePath === "action.yml" ||
+    filePath === "action.yaml" ||
+    filePath.endsWith(".json") ||
+    filePath.endsWith(".yaml") ||
+    filePath.endsWith(".yml") ||
+    filePath.endsWith(".toml") ||
+    filePath.endsWith(".hcl")
+  );
+}
+
+function isSecurityControlPath(filePath: string): boolean {
+  return (
+    isWorkflowFile(filePath) ||
+    filePath === ".github/codeowners" ||
+    filePath === "codeowners" ||
+    filePath.includes("codeowners") ||
+    filePath === "action.yml" ||
+    filePath === "action.yaml" ||
+    filePath === "agents.md" ||
+    filePath.startsWith("docs/process/") ||
+    filePath.includes("harness") ||
+    filePath.includes("policy")
+  );
+}
+
+function isMakefile(filePath: string): boolean {
+  return filePath === "makefile" || filePath.endsWith("/makefile");
+}
+
 function isTestOnlyPath(filePath: string): boolean {
   return matches(filePath, /(^|\/)(__tests__|tests?|spec)\//) || matches(filePath, /\.(test|spec)\.[a-z0-9]+$/);
 }
@@ -382,6 +517,16 @@ function isReadinessClaim(claim: string): boolean {
 
 function normalizeCheckName(name: string): string {
   return name.trim().toLowerCase();
+}
+
+function normalizeRequiredChecks(requiredChecks: string[]): string[] {
+  return requiredChecks.map(normalizeCheckName).filter(Boolean);
+}
+
+function validateRequiredChecks(requiredChecks: string[]): string | null {
+  return requiredChecks.map(normalizeCheckName).some((name) => name === "aps-gate")
+    ? "APS-GATE cannot be used as its own required check"
+    : null;
 }
 
 function hasRequiredTrustedApprovalFields(

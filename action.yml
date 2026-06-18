@@ -27,6 +27,10 @@ inputs:
     description: Comma-separated GitHub logins allowed to provide trusted owner approval.
     required: false
     default: ""
+  required-checks:
+    description: Comma-separated check names that must pass on the current PR head. Must not include APS-GATE.
+    required: false
+    default: ""
 runs:
   using: composite
   steps:
@@ -45,6 +49,7 @@ runs:
         APS_GATE_COMMENT_PATH: ${{ inputs.comment-path }}
         APS_GATE_POST_COMMENT: ${{ inputs.post-comment }}
         APS_GATE_TRUSTED_APPROVERS: ${{ inputs.trusted-approvers }}
+        APS_GATE_REQUIRED_CHECKS: ${{ inputs.required-checks }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
       run: |
         set -euo pipefail
@@ -60,4 +65,5 @@ runs:
           --output "$APS_GATE_OUTPUT_PATH" \
           --comment-output "$APS_GATE_COMMENT_PATH" \
           --trusted-approver "$APS_GATE_TRUSTED_APPROVERS" \
+          --required-check "$APS_GATE_REQUIRED_CHECKS" \
           $POST_COMMENT_ARG
