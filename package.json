@@ -3,6 +3,25 @@
   "version": "0.1.0",
   "description": "Deterministic AI PR Safety Gate for GitHub pull requests.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hiro4649/APS-GATE.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hiro4649/APS-GATE/issues"
+  },
+  "homepage": "https://github.com/hiro4649/APS-GATE#readme",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "require": "./dist/src/index.js"
+    }
+  },
   "bin": {
     "aps-gate": "dist/src/cli.js"
   },
@@ -17,7 +36,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test dist/tests/*.test.js",
     "demo": "npm run build && node dist/src/cli.js evaluate --input demo/fixtures/pass-standard.json --output aps-gate.safe.json --comment-output aps-gate.comment.md",
-    "harness:check": "node scripts/aps-harness-check.mjs"
+    "harness:check": "node scripts/aps-harness-check.mjs",
+    "prepack": "npm run build"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

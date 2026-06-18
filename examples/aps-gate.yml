@@ -2,6 +2,9 @@ name: APS-GATE
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
 
 permissions:
   contents: read
@@ -13,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate AI-authored PR
-        uses: your-org/aps-gate@v0
+        uses: hiro4649/APS-GATE@8712bbf527b033d0bc0fcd437df1e4d28089d943
         with:
           profile: standard
           github-token: ${{ secrets.GITHUB_TOKEN }}

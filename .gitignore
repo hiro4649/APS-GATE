@@ -3,3 +3,4 @@ dist/
 coverage/
 aps-gate*.safe.json
 aps-gate*.comment.md
+*.tgz
