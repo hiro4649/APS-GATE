@@ -1,0 +1,124 @@
+{
+  "marker": "CODEX_QUALITY_HARNESS_FILE v1.2.8",
+  "schemaVersion": "1.2.8",
+  "indexVersion": "1",
+  "indexPath": "docs/process/CODEX_ACTIVE_POLICY_INDEX.json",
+  "purpose": "Bound md and skill reads by task profile while preserving active authority.",
+  "defaultTaskProfile": "metadata_light",
+  "profileIdOnlyMode": true,
+  "rawLogsForbidden": true,
+  "fullHistoryForbidden": true,
+  "legacySpecReadDefault": "forbidden_unless_compatibility_failure_or_authority_conflict",
+  "prHistoryReadDefault": "forbidden_unless_safe_artifact_pointer_or_owner_request",
+  "requiredReads": [
+    "AGENTS.md",
+    "docs/process/CODEX_HARNESS_MANIFEST.json",
+    "docs/process/CODEX_V128_SPEC.md"
+  ],
+  "deferredReads": [
+    "docs/process/CODEX_V127_SPEC.md",
+    "README.md",
+    "legacy_specs",
+    "pr_history_docs"
+  ],
+  "selectedSkillsMax": 1,
+  "mdFilesReadMax": 2,
+  "newP0Artifact": false,
+  "newTopLevelStatus": false,
+  "newSkill": false,
+  "safeSummaryOnly": true,
+  "profiles": {
+    "routine": {
+      "requiredReads": [
+        "AGENTS.md",
+        "docs/process/CODEX_HARNESS_MANIFEST.json",
+        "docs/process/CODEX_V128_SPEC.md"
+      ],
+      "deferredReads": [
+        "docs/process/CODEX_V127_SPEC.md",
+        "README.md",
+        "legacy_specs",
+        "pr_history_docs"
+      ],
+      "mdFilesReadMax": 3,
+      "selectedSkillsMax": 1,
+      "thirdSkillAllowed": false
+    },
+    "metadata_light": {
+      "requiredReads": [
+        "AGENTS.md",
+        "docs/process/CODEX_HARNESS_MANIFEST.json"
+      ],
+      "deferredReads": [
+        "docs/process/CODEX_V128_SPEC.md",
+        "README.md",
+        "legacy_specs",
+        "pr_history_docs"
+      ],
+      "mdFilesReadMax": 2,
+      "selectedSkillsMax": 1,
+      "thirdSkillAllowed": false
+    },
+    "target_rollout": {
+      "requiredReads": [
+        "AGENTS.md",
+        "docs/process/CODEX_HARNESS_MANIFEST.json",
+        "docs/process/CODEX_V128_SPEC.md",
+        "owner_rollout_instruction"
+      ],
+      "deferredReads": [
+        "docs/process/CODEX_V127_SPEC.md",
+        "README.md",
+        "legacy_specs",
+        "pr_history_docs"
+      ],
+      "mdFilesReadMax": 4,
+      "selectedSkillsMax": 1,
+      "thirdSkillAllowed": false
+    }
+  },
+  "receiptCarriedContinuationAndEvidenceCompression": {
+    "version": "1.2.7",
+    "name": "Receipt-Carried Continuation and Evidence Compression",
+    "sourceOnlyRelease": false,
+    "targetRollout": "installed",
+    "finalAuthority": "v1.1.8_final_decision_kernel",
+    "decisionEvidence": {
+      "prBodyMachineEvidence": false,
+      "sameHeadBinderRequiredForMerge": true
+    },
+    "tokenEconomy": {
+      "ownerInterruptCountTarget": 0,
+      "repeatedSafetyTextSuppressed": true,
+      "deltaOnlyFinalSummary": true
+    },
+    "safety": {
+      "rawLogsRead": false,
+      "selfApproval": false,
+      "githubApprovalReview": false,
+      "runtimeReadinessClaimed": false,
+      "productionReadinessClaimed": false,
+      "walletRpcDeployAccess": false
+    }
+  },
+  "deterministicDecisionProjectionAndTokenMinimalLoopClosure": {
+    "version": "1.2.8",
+    "name": "Deterministic Decision Projection and Token-Minimal Loop Closure",
+    "sourceOnlyRelease": false,
+    "targetRollout": "completed",
+    "rolloutClass": "metadata_light",
+    "finalAuthority": "v1.1.8_final_decision_kernel",
+    "routine": {
+      "managedSafeArtifactRead": 1,
+      "coldArtifactRead": 0,
+      "selectedSkillMax": 1,
+      "finalReportLineMax": 8,
+      "ownerInterruptMax": 0
+    },
+    "projection": {
+      "authority": "non_authoritative",
+      "routineBytesMax": 1600,
+      "stressBytesMax": 2048
+    }
+  }
+}

@@ -87,7 +87,7 @@ requireFile("src/gate.ts");
 requireFile("src/profiles/common.ts");
 requireFile("tests/gate.test.ts");
 
-requireText("AGENTS.md", "CODEX_QUALITY_HARNESS_FILE v1.2.6");
+requireText("AGENTS.md", "CODEX_QUALITY_HARNESS_FILE v1.2.8");
 requireText("AGENTS.md", "false PASS");
 requireText("README.md", "AI PR Safety Gate");
 requireText("README.md", "User-supplied `policyEvidence` is advisory only");
@@ -95,8 +95,8 @@ requireText("README.md", "APS-GATE v0 does not read raw logs by default");
 rejectText("README.md", "production ready");
 rejectText("README.md", "legal compliant");
 
-requireJsonValue("docs/process/CODEX_HARNESS_MANIFEST.json", "activeHarnessVersion", "1.2.6");
-requireJsonValue("docs/process/CODEX_HARNESS_MANIFEST.json", "activeSelfTestSuite", "aps-gate-v0");
+requireJsonValue("docs/process/CODEX_HARNESS_MANIFEST.json", "activeHarnessVersion", "1.2.8");
+requireJsonValue("docs/process/CODEX_HARNESS_MANIFEST.json", "activeSelfTestSuite", "v128");
 requireJsonValue("docs/process/CODEX_HARNESS_MANIFEST.json", "forbiddenAuthority.externalLlmForCoreVerdict", false);
 requireJsonValue("docs/process/CODEX_HARNESS_MANIFEST.json", "forbiddenAuthority.autoMerge", false);
 requireJsonValue("docs/process/CODEX_HARNESS_MANIFEST.json", "policyEvidenceBoundary.userSuppliedPolicyEvidenceTrusted", false);
@@ -108,13 +108,13 @@ checkTrustBoundary();
 
 const status = failures.length ? "fail" : "pass";
 const report = {
-  marker: "CODEX_QUALITY_HARNESS_FILE v1.2.6",
-  profile: "APS_GATE_V126_LITE",
+  marker: "CODEX_QUALITY_HARNESS_FILE v1.2.8",
+  profile: "APS_GATE_V128_LITE",
   status,
   failures,
   warnings,
-  activeHarnessVersion: "1.2.6",
-  activeSelfTestSuite: "aps-gate-v0",
+  activeHarnessVersion: "1.2.8",
+  activeSelfTestSuite: "v128",
   safeSummaryOnly: true
 };
 
@@ -122,8 +122,8 @@ if (process.argv.includes("--json")) {
   console.log(JSON.stringify(report, null, 2));
 } else {
   console.log(`apsGateHarnessLiteStatus: ${status}`);
-  console.log("activeHarnessVersion: 1.2.6");
-  console.log("activeSelfTestSuite: aps-gate-v0");
+  console.log("activeHarnessVersion: 1.2.8");
+  console.log("activeSelfTestSuite: v128");
   if (warnings.length) console.log(`warnings: ${warnings.join(", ")}`);
   if (failures.length) console.log(`failures: ${failures.join(", ")}`);
 }
