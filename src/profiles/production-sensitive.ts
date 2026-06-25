@@ -2,6 +2,7 @@ import { GateInput, GateResult } from "../types";
 import {
   classifyChangedFiles,
   evaluateRequiredInputs,
+  evaluateSecurityControlBoundary,
   evaluateStandardEvidence,
   hasTrustedOwnerApproval,
   hasSameHeadCheckEvidence,
@@ -15,6 +16,11 @@ export function evaluateProductionSensitive(input: GateInput): GateResult {
   const inputBlocker = evaluateRequiredInputs(input, profileUsed, flags);
   if (inputBlocker) {
     return inputBlocker;
+  }
+
+  const securityControlBlocker = evaluateSecurityControlBoundary(input, profileUsed, flags);
+  if (securityControlBlocker) {
+    return securityControlBlocker;
   }
 
   const sameHeadCi = hasSameHeadCheckEvidence(input);

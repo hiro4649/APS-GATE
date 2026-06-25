@@ -227,6 +227,8 @@ In GitHub Action mode:
 - changed file collection failure must not produce `PASS`;
 - check collection failure must not produce `PASS` for code/profile changes that
   require evidence;
+- collection failures must be recorded with bounded `collectionStatus`
+  reason codes, not raw API payloads;
 - comment posting failure should warn but should not erase the verdict.
 
 ## 7. Verdict Semantics
@@ -369,6 +371,16 @@ Every run writes a safe artifact. Required fields:
   "evidenceHeadSha": "string or null",
   "profileUsed": "standard | crypto-web3 | production-sensitive",
   "forbiddenBoundaryFlags": {},
+  "collectionStatus": {
+    "status": "complete | incomplete",
+    "reasonCode": "OK | PR_HEAD_CHANGED_DURING_EVIDENCE_COLLECTION | PR_HEAD_UNAVAILABLE | FILE_LIST_UNAVAILABLE | CHECK_LIST_UNAVAILABLE | REVIEW_LIST_UNAVAILABLE | FILE_LIST_INCOMPLETE | CHECK_LIST_INCOMPLETE | REVIEW_LIST_INCOMPLETE",
+    "requiredChecksConfigured": true,
+    "requiredChecksSatisfied": false,
+    "fileListComplete": true,
+    "checkListComplete": true,
+    "reviewListComplete": true,
+    "approvalReceiptPresent": false
+  },
   "safeArtifactPath": "aps-gate.safe.json",
   "rawLogsRead": false,
   "secretsExposed": false,
@@ -382,6 +394,7 @@ Artifact requirements:
 - must not include secrets;
 - must not include tokens;
 - must not include unbounded GitHub API payloads;
+- must record collection completeness with bounded reason codes;
 - must preserve one verdict, one blocker, and one next action.
 
 ## 12. PR Comment
@@ -423,6 +436,12 @@ GitHub metadata collection must not read:
 If the file list cannot be fully collected, APS-GATE must not pass the PR. If a
 PR exceeds the current deterministic file listing limit, changed files must be
 treated as unavailable rather than partially safe.
+
+If the PR head changes during metadata collection, APS-GATE must block with
+`PR_HEAD_CHANGED_DURING_EVIDENCE_COLLECTION` and request a rerun on the current
+head. If GitHub API collection fails, APS-GATE must record a bounded
+`collectionStatus.reasonCode` and must not expose raw API responses, logs, or
+review bodies.
 
 ## 14. Required Local Verification
 

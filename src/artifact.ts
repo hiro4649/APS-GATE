@@ -13,6 +13,7 @@ export function buildSafeArtifact(result: GateResult, safeArtifactPath: string):
     evidenceHeadSha: result.evidenceHeadSha,
     profileUsed: result.profileUsed,
     forbiddenBoundaryFlags: result.forbiddenBoundaryFlags,
+    collectionStatus: result.collectionStatus,
     safeArtifactPath,
     rawLogsRead: false,
     secretsExposed: false,

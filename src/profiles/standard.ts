@@ -2,6 +2,7 @@ import { GateInput, GateResult } from "../types";
 import {
   classifyChangedFiles,
   evaluateRequiredInputs,
+  evaluateSecurityControlBoundary,
   evaluateStandardEvidence,
   makePass
 } from "./common";
@@ -12,6 +13,11 @@ export function evaluateStandard(input: GateInput): GateResult {
   const inputBlocker = evaluateRequiredInputs(input, profileUsed, flags);
   if (inputBlocker) {
     return inputBlocker;
+  }
+
+  const securityControlBlocker = evaluateSecurityControlBoundary(input, profileUsed, flags);
+  if (securityControlBlocker) {
+    return securityControlBlocker;
   }
 
   const evidenceBlocker = evaluateStandardEvidence(input, profileUsed, flags);

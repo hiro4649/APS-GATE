@@ -1,0 +1,6 @@
+.github/workflows/** @hiro4649
+action.yml @hiro4649
+AGENTS.md @hiro4649
+docs/process/** @hiro4649
+src/github.ts @hiro4649
+src/profiles/common.ts @hiro4649

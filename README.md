@@ -15,6 +15,9 @@ name: APS-GATE
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
 
 permissions:
   contents: read
@@ -25,14 +28,16 @@ jobs:
   aps-gate:
     runs-on: ubuntu-latest
     steps:
-      - uses: your-org/aps-gate@v0
+      - uses: hiro4649/APS-GATE@8712bbf527b033d0bc0fcd437df1e4d28089d943
         with:
           profile: standard
           github-token: ${{ secrets.GITHUB_TOKEN }}
           trusted-approvers: ""
+          required-checks: "test"
 ```
 
 APS-GATE does not check out or run untrusted PR code. It reads PR metadata, changed file names, and check/status conclusions for the current PR head SHA. Check evidence must match the current PR head SHA. `pull_request_target` is not the default because it can expose privileged workflow context to untrusted changes. On fork PRs, GitHub may prevent comment writes; APS-GATE still emits the artifact and stdout verdict.
+Pin the Action to a reviewed full commit SHA. A floating tag can be convenient after releases exist, but it is not the recommended security default.
 
 ## CLI
 
@@ -47,6 +52,7 @@ node dist/src/cli.js evaluate \
 ```
 
 The CLI exits `0` for `PASS` and `2` for `BLOCKED` or `OWNER_REQUIRED`. Add `--no-fail-on-blocked` for local inspection.
+Verification-relevant changes require explicit `--required-check` values. APS-GATE's own check must not be listed as a required check.
 
 ## Profiles
 
@@ -57,6 +63,11 @@ The CLI exits `0` for `PASS` and `2` for `BLOCKED` or `OWNER_REQUIRED`. Add `--n
 ## Trust boundary
 
 User-supplied `policyEvidence` is advisory only. It can explain context, but it cannot unlock `PASS`, satisfy owner approval, or replace same-head check evidence. Owner boundaries require `trustedApproval` with `source`, `approver`, `headSha`, `profile`, `decision`, `reason`, and `createdAt`; the `headSha` and `profile` must match the current run. In local mode, `source: "manual_fixture"` is accepted only for demo/test fixtures and is rejected in GitHub Action mode. In GitHub Action mode, `source: "github_review"` can unlock only when APS-GATE collected the approval from the GitHub API, the approver is in `trusted-approvers`, the review targets the current head SHA, and the approver is not the PR author or a bot.
+Protect `trusted-approvers` configuration with CODEOWNERS or repository/organization-controlled review. A PR author must not be able to add themselves as a trusted approver.
+
+## Verdict limits
+
+`PASS` means the APS-GATE policy and evidence gate passed. It does not mean the code is correct, vulnerability-free, audited, suitable for production use, legally compliant, or deploy-safe.
 
 ## Output
 

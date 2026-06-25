@@ -12,6 +12,27 @@ interface ParsedArgs {
   flags: Map<string, string[]>;
 }
 
+const KNOWN_FLAGS = new Set([
+  "changed-files",
+  "changed-files-file",
+  "checks-file",
+  "checks-json",
+  "comment-output",
+  "existing-artifact",
+  "from-github",
+  "github-token",
+  "head-sha",
+  "help",
+  "input",
+  "no-fail-on-blocked",
+  "output",
+  "post-comment",
+  "profile",
+  "required-check",
+  "run-mode",
+  "trusted-approver"
+]);
+
 main(process.argv.slice(2)).catch((error) => {
   console.error(`APS-GATE error: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
@@ -29,6 +50,9 @@ async function main(argv: string[]): Promise<void> {
     process.exitCode = 1;
     return;
   }
+
+  assertKnownFlags(parsed);
+  assertCompatibleFlags(parsed);
 
   const input = await buildGateInput(parsed);
   const outputPath = getStringFlag(parsed, "output") ?? "aps-gate.safe.json";
@@ -83,11 +107,12 @@ async function buildGateInput(parsed: ParsedArgs): Promise<GateInput> {
         trustedApprovers: input.trustedApprovers
       }
     );
-    mergeMissing(input, githubInput);
-    if (githubInput.trustedApproval) {
-      input.trustedApproval = githubInput.trustedApproval;
-    }
-    input.prAuthor ??= githubInput.prAuthor;
+    input.headSha = githubInput.headSha ?? null;
+    input.changedFiles = githubInput.changedFiles ?? null;
+    input.checks = githubInput.checks ?? [];
+    input.trustedApproval = githubInput.trustedApproval ?? null;
+    input.prAuthor = githubInput.prAuthor ?? null;
+    input.collectionStatus = githubInput.collectionStatus;
     input.runMode = "github_action";
   }
 
@@ -122,6 +147,30 @@ async function buildGateInput(parsed: ParsedArgs): Promise<GateInput> {
   }
 
   return input;
+}
+
+function assertKnownFlags(parsed: ParsedArgs): void {
+  for (const flag of parsed.flags.keys()) {
+    if (!KNOWN_FLAGS.has(flag)) {
+      throw new Error(`unknown APS-GATE CLI flag: --${flag}`);
+    }
+  }
+}
+
+function assertCompatibleFlags(parsed: ParsedArgs): void {
+  if (!getBooleanFlag(parsed, "from-github")) {
+    return;
+  }
+
+  for (const forbidden of ["head-sha", "changed-files", "changed-files-file", "checks-json", "checks-file", "existing-artifact"]) {
+    if (parsed.flags.has(forbidden)) {
+      throw new Error(`--from-github cannot be combined with --${forbidden}`);
+    }
+  }
+
+  if (getStringFlag(parsed, "run-mode") === "local") {
+    throw new Error("--from-github cannot be combined with --run-mode local");
+  }
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -177,12 +226,6 @@ function coerceChecks(value: unknown): CheckEvidence[] {
   }
 
   throw new Error("checks input must be an array or an object with a checks array");
-}
-
-function mergeMissing(target: GateInput, source: Partial<GateInput>): void {
-  target.headSha ??= source.headSha;
-  target.changedFiles ??= source.changedFiles;
-  target.checks ??= source.checks;
 }
 
 function getStringFlag(parsed: ParsedArgs, name: string): string | null {

@@ -8,6 +8,10 @@
   "evidenceHeadSha": "abc123",
   "profileUsed": "standard",
   "forbiddenBoundaryFlags": {
+    "verificationRelevantChanged": true,
+    "securityControlChanged": false,
+    "testsChanged": false,
+    "configurationChanged": false,
     "productCodeChanged": true,
     "packageOrLockfileChanged": false,
     "workflowChanged": false,
@@ -23,6 +27,16 @@
     "releaseTouched": false,
     "governanceTouched": false,
     "fundedTransactionTouched": false
+  },
+  "collectionStatus": {
+    "status": "complete",
+    "reasonCode": "OK",
+    "requiredChecksConfigured": true,
+    "requiredChecksSatisfied": false,
+    "fileListComplete": true,
+    "checkListComplete": true,
+    "reviewListComplete": true,
+    "approvalReceiptPresent": false
   },
   "safeArtifactPath": "aps-gate.safe.json",
   "rawLogsRead": false,
